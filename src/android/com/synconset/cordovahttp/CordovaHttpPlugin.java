@@ -86,26 +86,28 @@ public class CordovaHttpPlugin extends CordovaPlugin {
             CordovaHttpHead head = new CordovaHttpHead(urlString, params, headers, timeoutInMilliseconds, callbackContext);
 
             cordova.getThreadPool().execute(head);
-        } else if (action.equals("setSSLCertMode")) {
-            String mode = args.getString(0);
-
-            if (mode.equals("default")) {
-                HttpRequest.setSSLCertMode(HttpRequest.CERT_MODE_DEFAULT);
-                callbackContext.success();
-            } else if (mode.equals("nocheck")) {
-                HttpRequest.setSSLCertMode(HttpRequest.CERT_MODE_TRUSTALL);
-                callbackContext.success();
-            } else if (mode.equals("pinned")) {
-                try {
-                    this.loadSSLCerts();
-                    HttpRequest.setSSLCertMode(HttpRequest.CERT_MODE_PINNED);
-                    callbackContext.success();
-                } catch(Exception e) {
-                    e.printStackTrace();
-                    callbackContext.error("There was an error setting up ssl pinning");
-                }
-            }
-        } else if (action.equals("uploadFile")) {
+        }
+//        else if (action.equals("setSSLCertMode")) {
+//            String mode = args.getString(0);
+//
+//            if (mode.equals("default")) {
+//                HttpRequest.setSSLCertMode(HttpRequest.CERT_MODE_DEFAULT);
+//                callbackContext.success();
+//            } else if (mode.equals("nocheck")) {
+//                HttpRequest.setSSLCertMode(HttpRequest.CERT_MODE_TRUSTALL);
+//                callbackContext.success();
+//            } else if (mode.equals("pinned")) {
+//                try {
+//                    this.loadSSLCerts();
+//                    HttpRequest.setSSLCertMode(HttpRequest.CERT_MODE_PINNED);
+//                    callbackContext.success();
+//                } catch(Exception e) {
+//                    e.printStackTrace();
+//                    callbackContext.error("There was an error setting up ssl pinning");
+//                }
+//            }
+//        }
+        else if (action.equals("uploadFile")) {
             String urlString = args.getString(0);
             Object params = args.get(1);
             JSONObject headers = args.getJSONObject(2);
@@ -134,24 +136,24 @@ public class CordovaHttpPlugin extends CordovaPlugin {
         return true;
     }
 
-    private void loadSSLCerts() throws GeneralSecurityException, IOException {
-        AssetManager assetManager = cordova.getActivity().getAssets();
-        String[] files = assetManager.list("www/certificates");
-        ArrayList<String> cerFiles = new ArrayList<String>();
-
-        for (int i = 0; i < files.length; i++) {
-          int index = files[i].lastIndexOf('.');
-          if (index != -1) {
-            if (files[i].substring(index).equals(".cer")) {
-              cerFiles.add("www/certificates/" + files[i]);
-            }
-          }
-        }
-
-        for (int i = 0; i < cerFiles.size(); i++) {
-            InputStream in = cordova.getActivity().getAssets().open(cerFiles.get(i));
-            InputStream caInput = new BufferedInputStream(in);
-            HttpRequest.addCert(caInput);
-        }
-    }
+//    private void loadSSLCerts() throws GeneralSecurityException, IOException {
+//        AssetManager assetManager = cordova.getActivity().getAssets();
+//        String[] files = assetManager.list("www/certificates");
+//        ArrayList<String> cerFiles = new ArrayList<String>();
+//
+//        for (int i = 0; i < files.length; i++) {
+//          int index = files[i].lastIndexOf('.');
+//          if (index != -1) {
+//            if (files[i].substring(index).equals(".cer")) {
+//              cerFiles.add("www/certificates/" + files[i]);
+//            }
+//          }
+//        }
+//
+//        for (int i = 0; i < cerFiles.size(); i++) {
+//            InputStream in = cordova.getActivity().getAssets().open(cerFiles.get(i));
+//            InputStream caInput = new BufferedInputStream(in);
+//            HttpRequest.addCert(caInput);
+//        }
+//    }
 }

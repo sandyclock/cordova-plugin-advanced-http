@@ -64,11 +64,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.security.AccessController;
 import java.security.GeneralSecurityException;
-import java.security.KeyStore;
 import java.security.PrivilegedAction;
 import java.security.SecureRandom;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -89,10 +86,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-
-import android.text.TextUtils;
 
 /**
  * A fluid interface for making HTTP requests using an underlying
@@ -107,11 +101,6 @@ public class HttpRequest {
    * 'UTF-8' charset name
    */
   public static final String CHARSET_UTF8 = "UTF-8";
-
-  /**
-   * 'ISO-8859-1' charset name
-   */
-  public static final String CHARSET_LATIN1 = "ISO-8859-1";
 
   /**
    * 'application/x-www-form-urlencoded' content type header value
@@ -244,11 +233,6 @@ public class HttpRequest {
   public static final String METHOD_POST = "POST";
 
   /**
-   * 'PATCH' request method
-   */
-  public static final String METHOD_PATCH = "PATCH";
-
-  /**
    * 'PUT' request method
    */
   public static final String METHOD_PUT = "PUT";
@@ -263,12 +247,6 @@ public class HttpRequest {
    */
   public static final String PARAM_CHARSET = "charset";
 
-  public static final String CERT_MODE_DEFAULT = "default";
-
-  public static final String CERT_MODE_PINNED = "pinned";
-
-  public static final String CERT_MODE_TRUSTALL = "trustall";
-
   private static final String BOUNDARY = "00content0boundary00";
 
   private static final String CONTENT_TYPE_MULTIPART = "multipart/form-data; boundary="
@@ -278,13 +256,9 @@ public class HttpRequest {
 
   private static final String[] EMPTY_STRINGS = new String[0];
 
-  private static SSLSocketFactory SOCKET_FACTORY;
+  private static SSLSocketFactory TRUSTED_FACTORY;
 
-  private static String CURRENT_CERT_MODE = CERT_MODE_DEFAULT;
-
-  private static ArrayList<Certificate> PINNED_CERTS;
-
-  private static HostnameVerifier HOSTNAME_VERIFIER;
+  private static HostnameVerifier TRUSTED_VERIFIER;
 
   private static String getValidCharset(final String charset) {
     if (charset != null && charset.length() > 0)
@@ -293,97 +267,48 @@ public class HttpRequest {
       return CHARSET_UTF8;
   }
 
-  /**
-   * Configure SSL cert handling for all future HTTPS connections
-   *
-   * @param mode
-   */
-  public static void setSSLCertMode(String mode) {
-    try {
-      if (mode == CERT_MODE_TRUSTALL) {
-        SOCKET_FACTORY = createSocketFactory(getNoopTrustManagers());
-        HOSTNAME_VERIFIER = getTrustedVerifier();
-      } else if (mode == CERT_MODE_PINNED) {
-        SOCKET_FACTORY = createSocketFactory(getPinnedTrustManagers());
-        HOSTNAME_VERIFIER = null;
-      } else {
-        SOCKET_FACTORY = null;
-        HOSTNAME_VERIFIER = null;
-      }
-
-      CURRENT_CERT_MODE = mode;
-    } catch(IOException e) {
-      throw new HttpRequestException(e);
-    }
-  }
-
-  private static TrustManager[] getPinnedTrustManagers() throws IOException {
-    if (PINNED_CERTS == null) {
-      throw new IOException("You must add at least 1 certificate in order to pin to certificates");
-    }
-
-    try {
-      String keyStoreType = KeyStore.getDefaultType();
-      KeyStore keyStore = KeyStore.getInstance(keyStoreType);
-      keyStore.load(null, null);
-
-      for (int i = 0; i < PINNED_CERTS.size(); i++) {
-        keyStore.setCertificateEntry("CA" + i, PINNED_CERTS.get(i));
-      }
-
-      // Create a TrustManager that trusts the CAs in our KeyStore
-      String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
-      TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-      tmf.init(keyStore);
-
-      return tmf.getTrustManagers();
-    } catch (GeneralSecurityException e) {
-      IOException ioException = new IOException("Security exception configuring SSL trust managers");
-      ioException.initCause(e);
-      throw new HttpRequestException(ioException);
-    }
-  }
-
-  private static TrustManager[] getNoopTrustManagers() {
-    return new TrustManager[] { new X509TrustManager() {
-      public X509Certificate[] getAcceptedIssuers() {
-        return new X509Certificate[0];
-      }
-
-      public void checkClientTrusted(X509Certificate[] chain, String authType) {
-        // Intentionally left blank
-      }
-
-      public void checkServerTrusted(X509Certificate[] chain, String authType) {
-        // Intentionally left blank
-      }
-    }};
-  }
-
-  private static SSLSocketFactory createSocketFactory(TrustManager[] trustManagers)
+  private static SSLSocketFactory getTrustedFactory()
       throws HttpRequestException {
-    try {
-      SSLContext context = SSLContext.getInstance("TLS");
-      context.init(null, trustManagers, new SecureRandom());
+    if (TRUSTED_FACTORY == null) {
+      final TrustManager[] trustAllCerts = new TrustManager[] { new X509TrustManager() {
 
-      if (android.os.Build.VERSION.SDK_INT < 20) {
-        return new TLSSocketFactory(context);
-      } else {
-        return context.getSocketFactory();
+        public X509Certificate[] getAcceptedIssuers() {
+          return new X509Certificate[0];
+        }
+
+        public void checkClientTrusted(X509Certificate[] chain, String authType) {
+          // Intentionally left blank
+        }
+
+        public void checkServerTrusted(X509Certificate[] chain, String authType) {
+          // Intentionally left blank
+        }
+      } };
+      try {
+        SSLContext context = SSLContext.getInstance("TLS");
+        context.init(null, trustAllCerts, new SecureRandom());
+        TRUSTED_FACTORY = context.getSocketFactory();
+      } catch (GeneralSecurityException e) {
+        IOException ioException = new IOException(
+            "Security exception configuring SSL context");
+        ioException.initCause(e);
+        throw new HttpRequestException(ioException);
       }
-    } catch (GeneralSecurityException e) {
-      IOException ioException = new IOException("Security exception configuring SSL context");
-      ioException.initCause(e);
-      throw new HttpRequestException(ioException);
     }
+
+    return TRUSTED_FACTORY;
   }
 
   private static HostnameVerifier getTrustedVerifier() {
-    return new HostnameVerifier() {
-      public boolean verify(String hostname, SSLSession session) {
-        return true;
-      }
-    };
+    if (TRUSTED_VERIFIER == null)
+      TRUSTED_VERIFIER = new HostnameVerifier() {
+
+        public boolean verify(String hostname, SSLSession session) {
+          return true;
+        }
+      };
+
+    return TRUSTED_VERIFIER;
   }
 
   private static StringBuilder addPathSeparator(final String baseUrl,
@@ -410,35 +335,26 @@ public class HttpRequest {
   }
 
   private static StringBuilder addParam(final Object key, Object value,
-      final StringBuilder result) throws HttpRequestException {
-    return addParam(key, value, result, CHARSET_UTF8);
-  }
-
-  private static StringBuilder addParam(final Object key, Object value,
-      final StringBuilder result, String charset) throws HttpRequestException {
+      final StringBuilder result) {
     if (value != null && value.getClass().isArray())
       value = arrayToList(value);
 
-    try {
-      if (value instanceof Iterable<?>) {
-        Iterator<?> iterator = ((Iterable<?>) value).iterator();
-        while (iterator.hasNext()) {
-          result.append(URLEncoder.encode(key.toString(), charset));
-          result.append("[]=");
-          Object element = iterator.next();
-          if (element != null)
-            result.append(URLEncoder.encode(element.toString(), charset));
-          if (iterator.hasNext())
-            result.append("&");
-        }
-      } else {
-        result.append(URLEncoder.encode(key.toString(), charset));
-        result.append("=");
-        if (value != null)
-          result.append(URLEncoder.encode(value.toString(), charset));
+    if (value instanceof Iterable<?>) {
+      Iterator<?> iterator = ((Iterable<?>) value).iterator();
+      while (iterator.hasNext()) {
+        result.append(key);
+        result.append("[]=");
+        Object element = iterator.next();
+        if (element != null)
+          result.append(element);
+        if (iterator.hasNext())
+          result.append("&");
       }
-    } catch (UnsupportedEncodingException e) {
-      throw new HttpRequestException(e);
+    } else {
+      result.append(key);
+      result.append("=");
+      if (value != null)
+        result.append(value);
     }
 
     return result;
@@ -468,7 +384,15 @@ public class HttpRequest {
      * A {@link ConnectionFactory} which uses the built-in
      * {@link URL#openConnection()}
      */
-    ConnectionFactory DEFAULT = new OkConnectionFactory();
+    ConnectionFactory DEFAULT = new ConnectionFactory() {
+      public HttpURLConnection create(URL url) throws IOException {
+        return (HttpURLConnection) url.openConnection();
+      }
+
+      public HttpURLConnection create(URL url, Proxy proxy) throws IOException {
+        return (HttpURLConnection) url.openConnection(proxy);
+      }
+    };
   }
 
   private static ConnectionFactory CONNECTION_FACTORY = ConnectionFactory.DEFAULT;
@@ -481,46 +405,6 @@ public class HttpRequest {
       CONNECTION_FACTORY = ConnectionFactory.DEFAULT;
     else
       CONNECTION_FACTORY = connectionFactory;
-  }
-
-
-  /**
-  * Add a certificate to test against when using ssl pinning.
-  *
-  * @param ca
-  *          The Certificate to add
-  * @throws GeneralSecurityException
-  * @throws IOException
-  */
-  public static void addCert(Certificate ca) throws GeneralSecurityException, IOException  {
-    if (PINNED_CERTS == null) {
-      PINNED_CERTS = new ArrayList<Certificate>();
-    }
-
-    PINNED_CERTS.add(ca);
-
-    if (CURRENT_CERT_MODE == CERT_MODE_PINNED) {
-      SOCKET_FACTORY = createSocketFactory(getPinnedTrustManagers());
-    }
-  }
-
-  /**
-  * Add a certificate to test against when using ssl pinning.
-  *
-  * @param in
-  *          An InputStream to read a certificate from
-  * @throws GeneralSecurityException
-  * @throws IOException
-  */
-  public static void addCert(InputStream in) throws GeneralSecurityException, IOException {
-      CertificateFactory cf = CertificateFactory.getInstance("X.509");
-      Certificate ca;
-      try {
-          ca = cf.generateCertificate(in);
-          addCert(ca);
-      } finally {
-          in.close();
-      }
   }
 
   /**
@@ -1212,70 +1096,6 @@ public class HttpRequest {
     return post(encode ? encode(url) : url);
   }
 
-/**
-   * Start a 'PATCH' request to the given URL
-   *
-   * @param url
-   * @return request
-   * @throws HttpRequestException
-   */
-  public static HttpRequest patch(final CharSequence url)
-      throws HttpRequestException {
-    return new HttpRequest(url, METHOD_PATCH);
-  }
-
-  /**
-   * Start a 'PATCH' request to the given URL
-   *
-   * @param url
-   * @return request
-   * @throws HttpRequestException
-   */
-  public static HttpRequest patch(final URL url) throws HttpRequestException {
-    return new HttpRequest(url, METHOD_PATCH);
-  }
-
-  /**
-   * Start a 'PATCH' request to the given URL along with the query params
-   *
-   * @param baseUrl
-   * @param params
-   *          the query parameters to include as part of the baseUrl
-   * @param encode
-   *          true to encode the full URL
-   *
-   * @see #append(CharSequence, Map)
-   * @see #encode(CharSequence)
-   *
-   * @return request
-   */
-  public static HttpRequest patch(final CharSequence baseUrl,
-      final Map<?, ?> params, final boolean encode) {
-    String url = append(baseUrl, params);
-    return patch(encode ? encode(url) : url);
-  }
-
-  /**
-   * Start a 'PATCH' request to the given URL along with the query params
-   *
-   * @param baseUrl
-   * @param encode
-   *          true to encode the full URL
-   * @param params
-   *          the name/value query parameter pairs to include as part of the
-   *          baseUrl
-   *
-   * @see #append(CharSequence, Object...)
-   * @see #encode(CharSequence)
-   *
-   * @return request
-   */
-  public static HttpRequest patch(final CharSequence baseUrl,
-      final boolean encode, final Object... params) {
-    String url = append(baseUrl, params);
-    return patch(encode ? encode(url) : url);
-  }
-
   /**
    * Start a 'PUT' request to the given URL
    *
@@ -1655,7 +1475,6 @@ public class HttpRequest {
       throw new HttpRequestException(e);
     }
     this.requestMethod = method;
-    this.setupSecurity();
   }
 
   /**
@@ -1669,23 +1488,6 @@ public class HttpRequest {
       throws HttpRequestException {
     this.url = url;
     this.requestMethod = method;
-    this.setupSecurity();
-  }
-
-  private void setupSecurity() {
-    final HttpURLConnection connection = getConnection();
-
-    if (!(connection instanceof HttpsURLConnection)) {
-      return;
-    }
-
-    if (SOCKET_FACTORY != null) {
-      ((HttpsURLConnection) connection).setSSLSocketFactory(SOCKET_FACTORY);
-    }
-
-    if (HOSTNAME_VERIFIER != null) {
-      ((HttpsURLConnection) connection).setHostnameVerifier(HOSTNAME_VERIFIER);
-    }
   }
 
   private Proxy createProxy() {
@@ -1978,24 +1780,16 @@ public class HttpRequest {
   }
 
   /**
-   * Get the response body as ByteBuffer and set it as the value of the
+   * Get the response body as a {@link String} and set it as the value of the
    * given reference.
    *
    * @param output
    * @return this request
    * @throws HttpRequestException
    */
-  public HttpRequest body(final AtomicReference<ByteBuffer> output) throws HttpRequestException {
-    final ByteArrayOutputStream outputStream = byteStream();
-
-    try {
-      copy(buffer(), outputStream);
-      output.set(ByteBuffer.wrap(outputStream.toByteArray()));
-
-      return this;
-    } catch (IOException e) {
-      throw new HttpRequestException(e);
-    }
+  public HttpRequest body(final AtomicReference<String> output) throws HttpRequestException {
+    output.set(body());
+    return this;
   }
 
   /**
@@ -2011,6 +1805,7 @@ public class HttpRequest {
     output.set(body(charset));
     return this;
   }
+
 
   /**
    * Is the response body empty?
@@ -2583,16 +2378,6 @@ public class HttpRequest {
    */
   public HttpRequest acceptCharset(final String acceptCharset) {
     return header(HEADER_ACCEPT_CHARSET, acceptCharset);
-  }
-
-  /**
-   * Set the 'Accept-Charset' header to given values
-   *
-   * @param acceptCharsets
-   * @return this request
-   */
-  public HttpRequest acceptCharset(final String[] acceptCharsets) {
-    return header(HEADER_ACCEPT_CHARSET, TextUtils.join(", ", acceptCharsets));
   }
 
   /**
@@ -3389,6 +3174,39 @@ public class HttpRequest {
     if (!values.isEmpty())
       for (Entry<?, ?> entry : values.entrySet())
         form(entry, charset);
+    return this;
+  }
+
+  /**
+   * Configure HTTPS connection to trust all certificates
+   * <p>
+   * This method does nothing if the current request is not a HTTPS request
+   *
+   * @return this request
+   * @throws HttpRequestException
+   */
+  public HttpRequest trustAllCerts() throws HttpRequestException {
+    final HttpURLConnection connection = getConnection();
+    if (connection instanceof HttpsURLConnection)
+      ((HttpsURLConnection) connection)
+          .setSSLSocketFactory(getTrustedFactory());
+    return this;
+  }
+
+  /**
+   * Configure HTTPS connection to trust all hosts using a custom
+   * {@link HostnameVerifier} that always returns <code>true</code> for each
+   * host verified
+   * <p>
+   * This method does nothing if the current request is not a HTTPS request
+   *
+   * @return this request
+   */
+  public HttpRequest trustAllHosts() {
+    final HttpURLConnection connection = getConnection();
+    if (connection instanceof HttpsURLConnection)
+      ((HttpsURLConnection) connection)
+          .setHostnameVerifier(getTrustedVerifier());
     return this;
   }
 

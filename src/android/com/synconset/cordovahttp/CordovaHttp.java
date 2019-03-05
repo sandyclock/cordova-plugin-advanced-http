@@ -37,7 +37,7 @@ import com.github.kevinsawicki.http.HttpRequest.HttpRequestException;
 
 abstract class CordovaHttp {
     protected static final String TAG = "CordovaHTTP";
-    protected static final String[] ACCEPTED_CHARSETS = new String[] { HttpRequest.CHARSET_UTF8, HttpRequest.CHARSET_LATIN1 };
+    protected static final String[] ACCEPTED_CHARSETS = new String[] { HttpRequest.CHARSET_UTF8 };
     private static AtomicBoolean disableRedirect = new AtomicBoolean(false);
 
     private String urlString;
@@ -188,7 +188,7 @@ abstract class CordovaHttp {
       this.setupRedirect(request);
 
       request.readTimeout(this.getRequestTimeout());
-      request.acceptCharset(ACCEPTED_CHARSETS);
+      request.acceptCharset(ACCEPTED_CHARSETS[0]);
       request.headers(this.getHeadersMap());
       request.uncompress(true);
     }
@@ -209,31 +209,31 @@ abstract class CordovaHttp {
         .onUnmappableCharacter(CodingErrorAction.REPORT);
     }
 
-    private String decodeBody(AtomicReference<ByteBuffer> rawOutput, String charsetName)
-      throws CharacterCodingException, MalformedInputException {
+//    private String decodeBody(AtomicReference<ByteBuffer> rawOutput, String charsetName)
+//      throws CharacterCodingException, MalformedInputException {
+//
+//      if (charsetName == null) {
+//        return tryDecodeByteBuffer(rawOutput);
+//      }
+//
+//      return decodeByteBuffer(rawOutput, charsetName);
+//    }
 
-      if (charsetName == null) {
-        return tryDecodeByteBuffer(rawOutput);
-      }
-
-      return decodeByteBuffer(rawOutput, charsetName);
-    }
-
-    private String tryDecodeByteBuffer(AtomicReference<ByteBuffer> rawOutput)
-      throws CharacterCodingException, MalformedInputException {
-
-      for (int i = 0; i < ACCEPTED_CHARSETS.length - 1; i++) {
-        try {
-          return decodeByteBuffer(rawOutput, ACCEPTED_CHARSETS[i]);
-        } catch (MalformedInputException e) {
-          continue;
-        } catch (CharacterCodingException e) {
-          continue;
-        }
-      }
-
-      return decodeBody(rawOutput, ACCEPTED_CHARSETS[ACCEPTED_CHARSETS.length - 1]);
-    }
+//    private String tryDecodeByteBuffer(AtomicReference<ByteBuffer> rawOutput)
+//      throws CharacterCodingException, MalformedInputException {
+//
+//      for (int i = 0; i < ACCEPTED_CHARSETS.length - 1; i++) {
+//        try {
+//          return decodeByteBuffer(rawOutput, ACCEPTED_CHARSETS[i]);
+//        } catch (MalformedInputException e) {
+//          continue;
+//        } catch (CharacterCodingException e) {
+//          continue;
+//        }
+//      }
+//
+//      return decodeBody(rawOutput, ACCEPTED_CHARSETS[ACCEPTED_CHARSETS.length - 1]);
+//    }
 
     private String decodeByteBuffer(AtomicReference<ByteBuffer> rawOutput, String charsetName)
       throws CharacterCodingException, MalformedInputException {
@@ -245,27 +245,32 @@ abstract class CordovaHttp {
       try {
         JSONObject response = new JSONObject();
         int code = request.code();
-        AtomicReference<ByteBuffer> rawOutputReference = new AtomicReference<ByteBuffer>();
+//        AtomicReference<ByteBuffer> rawOutputReference = new AtomicReference<ByteBuffer>();
+//        AtomicReference<String> rawOutputReference = new AtomicReference<String>();
 
-        request.body(rawOutputReference);
+//        request.body(rawOutputReference);
+        String bodyString = request.body();
         response.put("status", code);
         response.put("url", request.url().toString());
         this.addResponseHeaders(request, response);
 
         if (code >= 200 && code < 300) {
-            response.put("data", decodeBody(rawOutputReference, request.charset()));
+            response.put("data", bodyString);
+//            response.put("data", decodeBody(rawOutputReference, request.charset()));
             this.getCallbackContext().success(response);
         } else {
-            response.put("error", decodeBody(rawOutputReference, request.charset()));
+            response.put("error", bodyString);
+//            response.put("error", decodeBody(rawOutputReference, request.charset()));
             this.getCallbackContext().error(response);
         }
       } catch(JSONException e) {
         this.respondWithError("There was an error generating the response");
-      } catch(MalformedInputException e) {
-        this.respondWithError("Could not decode response data due to malformed data");
-      } catch(CharacterCodingException e) {
-        this.respondWithError("Could not decode response data due to invalid or unknown charset encoding");
       }
+//      catch(MalformedInputException e) {
+//        this.respondWithError("Could not decode response data due to malformed data");
+//      } catch(CharacterCodingException e) {
+//        this.respondWithError("Could not decode response data due to invalid or unknown charset encoding");
+//      }
     }
 
     protected void handleHttpRequestException(HttpRequestException e) {

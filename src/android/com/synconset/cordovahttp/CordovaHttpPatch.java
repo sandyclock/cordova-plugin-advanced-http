@@ -23,7 +23,7 @@ class CordovaHttpPatch extends CordovaHttp implements Runnable {
     @Override
     public void run() {
         try {
-            HttpRequest request = HttpRequest.patch(this.getUrlString());
+            HttpRequest request = HttpRequest.put(this.getUrlString());
 
             this.setupDataSerializer(request);
             this.prepareRequest(request);

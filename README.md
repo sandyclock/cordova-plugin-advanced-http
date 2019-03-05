@@ -3,7 +3,7 @@ Cordova Advanced HTTP
 [![npm version](https://badge.fury.io/js/cordova-plugin-advanced-http.svg)](https://badge.fury.io/js/cordova-plugin-advanced-http)
 [![downloads/month](https://img.shields.io/npm/dm/cordova-plugin-advanced-http.svg)](https://www.npmjs.com/package/cordova-plugin-advanced-http)
 [![MIT Licence](https://badges.frapsoft.com/os/mit/mit.png)](https://opensource.org/licenses/mit-license.php)
-[![Build Status](https://travis-ci.org/silkimen/cordova-plugin-advanced-http.svg?branch=master)](https://travis-ci.org/silkimen/cordova-plugin-advanced-http)
+[![Build Status](https://travis-ci.org/sandyclock/cordova-plugin-advanced-http.svg?branch=master)](https://travis-ci.org/sandyclock/cordova-plugin-advanced-http)
 
 
 Cordova / Phonegap plugin for communicating with HTTP servers.  Supports iOS, Android and [Browser](#browserSupport).
@@ -26,9 +26,9 @@ The plugin conforms to the Cordova plugin specification, it can be installed
 using the Cordova / Phonegap command line interface.
 
 ```shell
-phonegap plugin add cordova-plugin-advanced-http
+phonegap plugin add cordova-plugin-safe-http
 
-cordova plugin add cordova-plugin-advanced-http
+cordova plugin add cordova-plugin-safe-http
 ```
 
 ## Usage
